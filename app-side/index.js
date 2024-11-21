@@ -8,8 +8,8 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = R * c; // Distance in kilometers
   return distance;
@@ -17,12 +17,8 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
 async function fetchTransportData(ctx, params) {
   const { latitude, longitude } = params;
-  const lowerCornerLon = longitude - 0.001;
-  const lowerCornerLat = latitude - 0.001;
-  const upperCornerLon = longitude + 0.001;
-  const upperCornerLat = latitude + 0.001;
-  
-  const url = `https://geoportal.emtvalencia.es/opentripplanner-api-webapp/ws/metadata/stopsInExtent?lowerCornerLon=${lowerCornerLon}&lowerCornerLat=${lowerCornerLat}&upperCornerLon=${upperCornerLon}&upperCornerLat=${upperCornerLat}`;
+
+  const url = `https://www.wiilink24.com/extras/locations.json`;
   try {
     const res = await fetch(url, { method: 'GET' });
     const resBody = await res.json();
@@ -33,56 +29,35 @@ async function fetchTransportData(ctx, params) {
       return;
     }
 
-    const stopsData = await Promise.all(resBody.stop.map(async stop => {
-      const routes = Array.isArray(stop.routes.rtI) ? await (async () => {
-        const route = stop.routes.rtI[0]; // Take the first element
-        const timeUrl = `https://geoportal.emtvalencia.es/EMT/mapfunctions/MapUtilsPetitions.php?sec=getSAE&parada=${stop.stopId}&adaptados=false&idioma=en&nocache=0.2266934924450733`;
-        const timeRes = await fetch(timeUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:132.0) Gecko/20100101 Firefox/132.0'
-          }
-        });
-    
-        // It returns an xml response, parse it to json
-        let timeText = await timeRes.text();
-        const buses = parseBusEstimations(timeText);
-        const closestBus = addClosestBusInfo(buses);
-        return closestBus;
-      })() : await (async () => {
-        const timeUrl = `https://geoportal.emtvalencia.es/EMT/mapfunctions/MapUtilsPetitions.php?sec=getSAE&parada=${stop.stopId}&adaptados=false&idioma=en&nocache=0.2266934924450733`;
-        const timeRes = await fetch(timeUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:132.0) Gecko/20100101 Firefox/132.0'
-          }
-        });
-    
-        // It returns an xml response, parse it to json
-        let timeText = await timeRes.text();
-        const buses = parseBusEstimations(timeText);
-        const closestBus = addClosestBusInfo(buses);
-        return closestBus;
-      })();
-    
-      const closestBus = routes.closestBus;
-    
-      // Calculate the distance from the user to the stop
-      const distance = calculateDistance(latitude, longitude, stop.lat, stop.lon);
-    
+    console.log("Response body:", resBody);
+
+    // Filter the stops close to you and add the distance in meters
+    const filteredStops = resBody.stops
+      .map(stop => {
+        const distance = calculateDistance(latitude, longitude, stop.stop_lat, stop.stop_lon) * 1000; // Convert to meters
+        return {
+          ...stop,
+          distance: Math.trunc(distance) // Truncate the distance to an integer
+        };
+      })
+      .filter(stop => stop.distance <= 1000); // Filter stops within 1000 meters (1 km)
+
+    const stopsData = await Promise.all(filteredStops.map(async stop => {
+      const additionalDataUrl = `https://metroapi.alexbadi.es/prevision/${stop.stop_id}/parse`;
+      const additionalDataRes = await fetch(additionalDataUrl, { method: 'GET' });
+      const additionalData = await additionalDataRes.json();
+
       return {
-        stopId: stop.stopId,
-        name: stop.name,
-        ubica: stop.ubica,
-        routes: stop.routes,
-        lat: stop.lat,
-        lon: stop.lon,
-        closestBus: closestBus,
-        distance: distance
+        ...stop,
+        additionalData
       };
     }));
 
     // Sort the stops by distance
     stopsData.sort((a, b) => a.distance - b.distance);
-    
+
+    console.log("Combined stops data:", stopsData);
+
     let length = stopsData.length;
     ctx.response({
       data: { result: stopsData, length: length },
@@ -97,22 +72,19 @@ async function fetchTransportData(ctx, params) {
 }
 
 async function fetchTransportDataStop(ctx, params) {
-  const { latitude, longitude, stopId } = params;
-  const url = `https://geoportal.emtvalencia.es/EMT/mapfunctions/MapUtilsPetitions.php?sec=getSAE&parada=${stopId}&adaptados=false&idioma=en&nocache=0.2266934924450733`;
+  const { stopId } = params;
+  const url = `https://metroapi.alexbadi.es/prevision/${stopId}/parse`;
   const stopRes = await fetch(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:132.0) Gecko/20100101 Firefox/132.0'
     }
   });
-  
-  // It returns an xml response, parse it to json
-  let stopText = await stopRes.text();
-  const buses = parseBusEstimations(stopText);
 
-  // Add in response data and length objects in one
-  let length = buses.buses.length;
+  const stopData = await stopRes.json();
+  console.log("Stop data:", stopData);
+  const length = stopData.previsiones.length;
   ctx.response({
-    data: { result: buses, length: length },
+    data: { result: stopData, length: length },
   });
 }
 
@@ -122,9 +94,9 @@ AppSideService({
 
     messageBuilder.on("request", (ctx) => {
       const jsonRpc = messageBuilder.buf2Json(ctx.request.payload);
-      if (jsonRpc.method === "GET_EMT") {
+      if (jsonRpc.method === "GET_METROVALENCIA") {
         return fetchTransportData(ctx, jsonRpc.params);
-      } else if (jsonRpc.method === "GET_EMT_STOP") {
+      } else if (jsonRpc.method === "GET_METROVALENCIA_STOP") {
         return fetchTransportDataStop(ctx, jsonRpc.params);
       }
     });

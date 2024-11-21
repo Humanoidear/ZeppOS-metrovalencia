@@ -1,7 +1,7 @@
 {
   "configVersion": "v2",
   "app": {
-    "appId": 24327,
+    "appId": 1067933,
     "appName": "metrovalencia",
     "appType": "app",
     "version": {
@@ -42,6 +42,26 @@
         {
           "name": "bip5",
           "deviceSource": 8454401
+        },
+        {
+          "name": "bip5-unity",
+          "deviceSource": 8782081
+        },
+        {
+          "name": "gts4",
+          "deviceSource": 7995649
+        },
+        {
+          "name": "gts4-mini",
+          "deviceSource": 247
+        },
+        {
+          "name": "cheetah",
+          "deviceSource": 8257793
+        },
+        {
+          "name": "edge",
+          "deviceSource": 8388865
         }
       ],
       "designWidth": 480
