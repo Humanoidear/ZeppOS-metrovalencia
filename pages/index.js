@@ -40,7 +40,7 @@ Page({
   getStops() {
     geolocation.start();
     const latitude = geolocation.getLatitude();
-    const longitude = geolocation.getLongitude() * -1;
+    const longitude = geolocation.getLongitude();
 
     messageBuilder
       .request({

@@ -45,7 +45,7 @@ Page({
 
     geolocation.start();
     const paramData = JSON.parse(params);
-    distance = distanceGPStoLocation(geolocation.getLatitude(), geolocation.getLongitude() * -1, paramData.stopLatitude, paramData.stopLongitude);
+    distance = distanceGPStoLocation(geolocation.getLatitude(), geolocation.getLongitude(), paramData.stopLatitude, paramData.stopLongitude);
   },
   build() {
     const viewContainer2 = createWidget(widget.GROUP, {
